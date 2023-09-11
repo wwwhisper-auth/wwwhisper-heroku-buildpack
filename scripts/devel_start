@@ -8,20 +8,11 @@
 # settings' panel of the app to allow requests from
 # http://localhost:8080.
 
-set -e
 
 if [[ -z "${WWWHISPER_URL}" ]]; then
   echo "WWWHISPER_URL environment variable is not set"
   exit 1
 fi
-
-exit_cleanup() {
-    echo "Killing child processes"
-    pkill -P $$;
-    exit 0;
-}
-
-trap exit_cleanup 0
 
 export STACK="heroku-22";
 export PORT=8080
@@ -53,4 +44,4 @@ source .profile.d/start-wwwhisper.sh
 # Buildpack started. In a separate terminal start a web application to
 # listen on port 10080.
 
-wait
+wait -f

@@ -27,6 +27,8 @@ then
   return 0
 fi
 
+WWWHISPER_NGINX_PID_FILE=`pwd`/wwwhisper/logs/nginx.pid
+
 function wwwhisper_log() {
   echo "buildpack=wwwhisper $*"
 }
@@ -34,6 +36,21 @@ function wwwhisper_log() {
 function wwwhisper_fatal() {
   wwwhisper_log "$*"
   exit 1
+}
+
+
+# When SIGTERM is delivered, wait until nginx terminates and then
+# re-raise the SIGTERM to terminate the web application.
+function wwwhisper_sigterm_handler() {
+  wwwhisper_log "SIGTERM received, waiting for nginx to terminate."
+  # nginx removes the pid file when it exits.
+  while [[ -f ${WWWHISPER_NGINX_PID_FILE} ]] ; do
+    sleep 0.2;
+  done
+  wwwhisper_log "nginx terminated."
+  # Remove the trap and re-raise the signal
+  trap - SIGTERM
+  kill -SIGTERM $$
 }
 
 function wwwhisper_main() {
@@ -62,7 +79,7 @@ function wwwhisper_main() {
 
   wwwhisper_log "Created configuration files for nginx authorization."
 
-  wwwhisper_run_nginx() {
+  function wwwhisper_run_nginx() {
     wwwhisper_log "Waiting for the app to start listening on port ${PORT}."
 
     # Loop without any time limit, but Heroku will kill the dyno if
@@ -79,18 +96,23 @@ function wwwhisper_main() {
       bin_to_run="nginx-debug"
     fi
 
+    # Do not terminate the subshell with SIGTERM, let nginx handle
+    # this signal and terminate gracefully which then terminates the
+    # subshell.
+    trap "" SIGTERM
+
     wwwhisper_log "Staring nginx process to authorize requests."
     ./wwwhisper/bin/${bin_to_run} -p wwwhisper -c config/nginx.conf &
     local nginx_pid="$!"
 
-    wait ${nginx_pid}
+    wait -f ${nginx_pid}
     local exit_code=$?
 
     # Dyno manager monitors web app process, not nginx process, so
     # when nginx fails, we terminate web app process. This way dyno
     # manager notices dyno failure and restarts the dyno (it would
-    # eventually do it anyway, because $PORT would stop accepting
-    # requests, but terminating web app process makes it quicker).
+    # eventually do it anyway, because $PORT stops accepting requests,
+    # but terminating web app process makes it quicker).
     #
     # If nginx is terminated by Heroku dyno manager (SIGTERM or
     # SIGQUIT), exit code is 0 and we don't resend this signal,
@@ -99,9 +121,11 @@ function wwwhisper_main() {
     if (( ${exit_code} != 0 )); then
       wwwhisper_log "nginx failed with code ${exit_code}," \
                     "killing web app with SIGTERM."
+      # In case nginx crashed without removing the pid file.
+      rm ${WWWHISPER_NGINX_PID_FILE}
       kill -SIGTERM ${web_app_pid} >/dev/null
       if (( $? == 0 )); then
-        # Sigterm was delivered successfully, deliver sigkill after some time.
+        # SIGTERM was delivered successfully, deliver SIGKILL after some time.
         sleep 40
         wwwhisper_log "Killing web app with SIGKILL."
         kill -SIGKILL ${web_app_pid} >/dev/null
@@ -112,17 +136,11 @@ function wwwhisper_main() {
     exit 1;
   }
 
+  trap wwwhisper_sigterm_handler SIGTERM
   wwwhisper_run_nginx &
 }
 
 wwwhisper_main
-
-# Cleanup globals to prevent potential interference with other
-# scripts.
-unset -f wwwhisper_main
-unset -f wwwhisper_run_nginx
-unset -f wwwhisper_log
-unset -f wwwhisper_fatal
 
 # Do not pass WWWHISPER_URL to the app. This is in case wwwhisper
 # buildpack is enabled for an app that already uses wwwhisper

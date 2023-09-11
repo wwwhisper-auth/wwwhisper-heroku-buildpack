@@ -40,6 +40,10 @@ but with substantial modifications:
   modify Procfile and to modify an app to listen on a Unix domain
   socket, as is the case with the original nginx buildpack).
 
+* In accordance with [Heroku
+  guidance](https://devcenter.heroku.com/articles/dynos#graceful-shutdown-with-sigterm),
+  nginx is terminated gracefully on SIGTERM.
+
 * nginx configs are modified to perform authentication/authorization
   before requests are forwarded to the application. The buildpack
   doesn't currently support supplying a custom `nginx.conf`.
