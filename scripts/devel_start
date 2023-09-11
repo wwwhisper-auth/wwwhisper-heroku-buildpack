@@ -1,0 +1,56 @@
+#!/bin/bash
+#
+# Compiles and starts the buildpack on development machine.
+#
+# This script needs to be started with WWWHISPER_URL environment
+# variable. Use `heroku config` command for an app with wwwhisper
+# enabled to get the URL. You need also to use /wwwhisper/admin/ 'Site
+# settings' panel of the app to allow requests from
+# http://localhost:8080.
+
+set -e
+
+if [[ -z "${WWWHISPER_URL}" ]]; then
+  echo "WWWHISPER_URL environment variable is not set"
+  exit 1
+fi
+
+exit_cleanup() {
+    echo "Killing child processes"
+    pkill -P $$;
+    exit 0;
+}
+
+trap exit_cleanup 0
+
+export STACK="heroku-22";
+export PORT=8080
+
+# Uncomment to use nginx-debug.
+# export WWWHISPER_DEBUG="1"
+
+umask 077
+
+out_dir="/tmp/wwwhisper-buildpack"
+
+rm -rf ${out_dir}
+build_dir="${out_dir}/buildpack-compiled"
+env_dir="${out_dir}/env"
+cache_dir="${out_dir}/cache" # unused
+
+mkdir -p ${env_dir};
+echo ${WWWHISPER_URL} > ${env_dir}/WWWHISPER_URL
+# Uncomment to disable wwwhisper overlay injection.
+#echo 1 > ${env_dir}/WWWHISPER_NO_OVERLAY
+
+
+./bin/compile ${build_dir} ${cache_dir} ${env_dir}
+
+cd ${build_dir}
+
+source .profile.d/start-wwwhisper.sh
+
+# Buildpack started. In a separate terminal start a web application to
+# listen on port 10080.
+
+wait

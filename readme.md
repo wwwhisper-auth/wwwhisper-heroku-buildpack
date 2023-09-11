@@ -1,124 +1,92 @@
-# Heroku Buildpack: Nginx
+# wwwhisper Buildpack for Heroku
 
-Nginx-buildpack installs & runs the [Nginx web server](https://nginx.org/) inside a Heroku app.
+Provides application-independent access control for Heroku-hosted
+web applications. The access control is based on verified email
+addresses of visitors.
 
-## Features
+The buildpack requires the Heroku [wwwhisper
+add-on](https://elements.heroku.com/addons/wwwhisper).
 
-* Presets for specific use-cases
-	- [Static sites](static.md)
-	- [Local proxy to app servers](proxy.md)
-* Complete control of Nginx config in `config/nginx.erb.conf`
-	- [`erb` template](https://github.com/ruby/erb) supports dynamic config at start-up
-	- see [Nginx docs](https://nginx.org/en/docs/)
-* writes [Heroku request ids](https://devcenter.heroku.com/articles/http-request-id) & server timing to access logs
+The buildpack installs and runs an nginx proxy that communicates with
+the wwwhisper service to authenticate and authorize
+visitors. Authorized requests are passed to the app, unauthorized ones
+are rejected with 401 or 403 HTTP errors.
+
+nginx listens on an externally accessible $PORT configured by the
+Heroku dyno manager. The $PORT passed to the application is reassigned
+to a private port that is not externally accessible.
+
+See also [the documentation on
+Heroku](https://devcenter.heroku.com/articles/wwwhisper).
 
 
-### Nginx versions
+## Buildpack Development
 
-These are auto-selected based on the app's stack at build time.
+The buildpack is based on
+[heroku-buildpack-nginx](https://github.com/heroku/heroku-buildpack-nginx),
+but with substantial modifications:
 
-| Heroku Stack | Nginx Version |
-|--------------|--------------:|
-| `Heroku-18` | `1.25.1` |
-| `Heroku-20` | `1.25.1` |
-| `Heroku-22` | `1.25.1` |
+* nginx is built with the `auth_request` module and a minimal
+  number of other modules and dependencies.
 
-## Presets
+* The buildpack uses a `.profile.d` script to configure enviroment,
+  start, and monitor nginx as a background job. The $PORT environment
+  variable passed to the application is changed to a local, not
+  externally accessible port. The script waits for this local port to
+  be bound by the application before nginx is started. This way, the
+  Heroku Dyno Manager/Vegur router does not pass requests to nginx
+  when the application is not yet ready to process them. These changes
+  allow to enable the buildpack with a single command (no need to
+  modify Procfile and to modify an app to listen on a Unix domain
+  socket, as is the case with the original nginx buildpack).
 
-With Nginx's flexibility, it can be configured & used for many different purposes. See the documentation for the mode you wish to use.
+* nginx configs are modified to perform authentication/authorization
+  before requests are forwarded to the application. The buildpack
+  doesn't currently support supplying a custom `nginx.conf`.
 
-### [Static sites](static.md)
+* Configuration templates are changed to use `envsubst` instead of
+  more powerful `erb` templates. `erb` required the buildpack to
+  install Ruby on Heroku stack 22.
 
-HTTP server for websites and single page apps. [[docs](static.md)]
 
-### [Local proxy](proxy.md)
+### Upgrading Nginx or changing compilation options
 
-HTTP proxy to an app server running in the same dyno, via UNIX domain sockets. [[docs](proxy.md)]
+Use only stable, even-numbered [Nginx
+releases](https://nginx.org/en/download.html).
 
-_Proxy is the original buildpack mode that is enabled by default, if the `config/nginx.conf.erb` file is not added to app source._
-
-### Solo mode (deprecated)
-
-This mode has been superceeded by [Static mode](static.md). 
-
-## Custom Nginx usage
-
-Have a use for Nginx that does not fit one of the above presets?
-
-Add this buildpack to an app, as the last buildpack:
-```bash
-heroku buildpacks:add --app APP_NAME heroku-community/nginx
-```
-
-…and then setup `config/nginx.conf.erb` & `Procfile` in the app's source repo.
-
-## General configuration
-
-### Setting the Worker Processes and Connections
-
-You can configure Nginx's `worker_processes` directive via the
-`NGINX_WORKERS` environment variable.
-
-For example, to set your `NGINX_WORKERS` to 8 on a PX dyno:
-
-```bash
-$ heroku config:set NGINX_WORKERS=8
-```
-
-Similarly, the `NGINX_WORKER_CONNECTIONS` environment variable can configure the `worker_connections` directive:
-
-```bash
-$ heroku config:set NGINX_WORKER_CONNECTIONS=2048
-```
-
-### Customizable Nginx Compile Options
-
-This requires a clone of this repository and [Docker](https://www.docker.com/). All you need to do is have Docker setup and running on your machine. The [`Makefile`](Makefile) will take care of the rest.
-
-Configuring is as easy as changing the options passed to `./configure` in [scripts/build_nginx](scripts/build_nginx).
-
-Run the builds in a container via:
+Revise the version variables or compilation options in
+[scripts/build_nginx](scripts/build_nginx), and then run the builds in
+a container (requires Docker) via:
 
 ```
 $ make build
 ```
 
-The binaries will be packed into `tar` files and placed in the repository's root directory. Commit the changes and push your repository.
+The binaries will be packed into `tar` files and placed in the
+repository's root directory. Commit & pull-request the resulting
+changes.
 
-Finally update your app to use your custom buildpack on Heroku either at https://dashboard.heroku.com/apps/#{YOUR_APP_NAME}/settings or via the Heroku CLI via:
+### Starting the buildpack locally
 
-```
-heroku buildpacks:set #{YOUR_GIT_REPO_CLONE}
-```
-
-To test the builds locally:
-
-```
-$ make shell
-$ cp bin/nginx-$STACK bin/nginx
-$ FORCE=1 bin/start-nginx
-```
-
-## Upgrading dependencies
-
-Process docs for buildpack maintainers.
-
-### Upgrading Nginx, PCRE, zlib
-
-_Please use only stable, even-numbered [Nginx releases](https://nginx.org/en/download.html)._
-
-Revise the version variables in `scripts/build_nginx`, and then run the builds in a container (requires Docker) via:
+Get `WWWHISPER_URL` by running `heroku config` for a Heroku app with
+the wwwhisper add-on enabled.
 
 ```
-$ make build
+WWWHISPER_URL="PUT_YOUR_WWWHISPER_URL_HERE" ./scripts/devel_start
 ```
 
-Then, commit & pull-request the resulting changes.
+## Authors, License, and Copyright
 
-### Upgrading Ruby
+The original nginx buildpack was created by Ryan R. Smith:
 
-_Ruby versions are downloaded from heroku-buildpack-ruby's distribution site. Only Heroku's [supported Ruby versions](https://devcenter.heroku.com/articles/ruby-support#ruby-versions) are available._
+*Copyright (c) 2013 Ryan R. Smith \
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*
 
-Revise the `ruby_version` variable in `bin/compile`.
+For a list of further contributors, see
+[heroku-buildpack-nginx](https://github.com/heroku/heroku-buildpack-nginx)
+repository history.
 
-Then, commit & pull-request the resulting changes.
+Changes for wwwhisper are Copyright (C) 2023 Jan Wrobel, jan@mixedbit.org.
+

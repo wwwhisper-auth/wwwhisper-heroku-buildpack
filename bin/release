@@ -1,2 +1,7 @@
 #!/usr/bin/env bash
-echo "--- {}"
+
+cat << EOF
+---
+addons:
+  - wwwhisper
+EOF

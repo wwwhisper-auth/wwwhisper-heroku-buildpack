@@ -2,74 +2,65 @@
 
 set -e
 
-# clean up leaking environment
-unset GIT_DIR
-
-# parse and derive params
 BUILD_DIR=$1
 CACHE_DIR=$2
-BUILDPACK_DIR="$(dirname "$(dirname "$0")")"
+ENV_DIR=$3
 
-mkdir -p "$BUILD_DIR/bin/"
-mkdir -p "$BUILD_DIR/nginx"
-tar -zxvf "nginx-$STACK".tgz -C "$BUILD_DIR/nginx"
+DST_DIR="${BUILD_DIR}/wwwhisper/"
 
-cp "$BUILD_DIR/nginx/nginx" "$BUILD_DIR/bin/nginx"
-cp "$BUILD_DIR/nginx/nginx-debug" "$BUILD_DIR/bin/nginx-debug"
+function wwwhisper_log() {
+  echo "-----> wwwhisper-buildpack: $*"
+}
 
-nginx_version=$($BUILD_DIR/bin/nginx -V 2>&1 | head -1 | awk '{ print $NF }')
-echo "-----> nginx-buildpack: Installed ${nginx_version} to app/bin"
-
-# The ERB templating feature requires a Ruby install at runtime, for the `erb` command.
-# As of Heroku-22, there is no system Ruby installation in the stack image, so if the
-# app doesn't already have the Ruby buildpack set before this one, we have to vendor
-# our own copy of Ruby and ensure it's on PATH at runtime.
-if ! command -v erb &> /dev/null; then
-  echo "-----> nginx-buildpack: An existing Ruby installation was not found (required for erb template support)"
-  ruby_version="3.2.2"
-  ruby_url="https://heroku-buildpack-ruby.s3.us-east-1.amazonaws.com/${STACK}/ruby-${ruby_version}.tgz"
-  vendored_ruby_dir=".heroku-buildpack-nginx/ruby"
-  mkdir -p "${BUILD_DIR}/${vendored_ruby_dir}"
-
-  if ! curl --silent --show-error --fail --retry 3 --retry-connrefused --connect-timeout 5 "${ruby_url}" | tar -zxC "${BUILD_DIR}/${vendored_ruby_dir}"; then
-    echo "     ! Failed to download Ruby from '${ruby_url}'" >&2
-    exit 1
-  fi
-
-  mkdir -p "${BUILD_DIR}/.profile.d"
-  # Deliberately pick the same profile.d script filepath as the Ruby buildpack,
-  # so if the Ruby buildpack comes after this one, it will overwrite this script.
-  echo "export PATH=\"\${HOME}/${vendored_ruby_dir}/bin:\${PATH}\"" > "${BUILD_DIR}/.profile.d/ruby.sh"
-
-  echo "-----> nginx-buildpack: Installed Ruby ${ruby_version}"
+if [[ ! -f "${ENV_DIR}/WWWHISPER_URL" ]]; then
+  wwwhisper_log 'wwwhisper add-on must be enabled to use this buildpack.'
+  exit 1
 fi
 
-cp bin/start-nginx "$BUILD_DIR/bin/"
-echo '-----> nginx-buildpack: Added start-nginx to app/bin'
-cp bin/start-nginx-debug "$BUILD_DIR/bin/"
-echo '-----> nginx-buildpack: Added start-nginx-debug to app/bin'
-cp bin/start-nginx-solo "$BUILD_DIR/bin/"
-echo '-----> nginx-buildpack: Added start-nginx-solo to app/bin'
-cp bin/start-nginx-static "$BUILD_DIR/bin/"
-echo '-----> nginx-buildpack: Added start-nginx-static to app/bin'
+WWWHISPER_URL=`cat ${ENV_DIR}/WWWHISPER_URL`
 
-mkdir -p "$BUILD_DIR/config"
+function wwwhisper_host() {
+  echo https://`echo ${WWWHISPER_URL}|tr @ '\n'| tail -n1`
+}
 
-if [[ ! -f $BUILD_DIR/config/mime.types ]]; then
-	cp "$BUILD_DIR/nginx/mime.types" "$BUILD_DIR/config/"
-	echo '-----> nginx-buildpack: Default mime.types copied to app/config/'
+function wwwhisper_basic_auth() {
+  local proto_credentials=`echo ${WWWHISPER_URL} |tr @ '\n'|head -n1`
+  # strip protocol prefix
+  local credentials=${proto_credentials#"https://"}
+  echo -n "${credentials}" | base64
+}
+
+mkdir -p "${DST_DIR}/nginx" "${DST_DIR}/bin" "${DST_DIR}/config" \
+      "${DST_DIR}/logs" "${BUILD_DIR}/.profile.d"
+
+tar -zxf "nginx-${STACK}.tgz" -C "${DST_DIR}/nginx/"
+
+pushd "${DST_DIR}" > /dev/null
+
+mv nginx/nginx nginx/nginx-debug ./bin/
+mv nginx/mime.types ./config/
+
+nginx_version=$(./bin/nginx -V 2>&1 | head -1 | awk '{ print $NF }')
+wwwhisper_log "Installed ${nginx_version} to ${DST_DIR}"
+
+rmdir nginx;
+
+popd > /dev/null
+
+cp .profile.d/start-wwwhisper.sh "${BUILD_DIR}/.profile.d/"
+wwwhisper_log "Added start-wwwhisper.sh to .profile.d/"
+
+cp config/nginx.template.conf config/proxy_common.conf "${DST_DIR}/config/"
+
+if [[ -f "${ENV_DIR}/WWWHISPER_NO_OVERLAY" ]]; then
+  # Use an empty file instead of overlay enabling directives.
+  echo "" > "${DST_DIR}/config/wwwhisper_overlay.conf";
 else
-	echo '-----> nginx-buildpack: Custom mime.types found in app/config.'
-fi
+  cp config/wwwhisper_overlay.conf "${DST_DIR}/config/"
+fi;
 
-if [[ ! -f $BUILD_DIR/config/nginx.conf.erb ]]; then
-	cp config/nginx.conf.erb "$BUILD_DIR/config/"
-	echo '-----> nginx-buildpack: Default config copied to app/config.'
-else
-	echo '-----> nginx-buildpack: Custom config found in app/config.'
-fi
+WWWHISPER_HOST=$(wwwhisper_host) \
+WWWHISPER_BASIC_AUTH=$(wwwhisper_basic_auth) \
+envsubst '$WWWHISPER_HOST $WWWHISPER_BASIC_AUTH' <  config/wwwhisper_proxy.template.conf > ${DST_DIR}/config/wwwhisper_proxy.conf
 
-# cleanup
-rm -r "$BUILD_DIR/nginx"
-
-exit 0
+wwwhisper_log 'Prepared configs.'
