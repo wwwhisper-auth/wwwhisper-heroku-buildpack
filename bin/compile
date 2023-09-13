@@ -12,24 +12,6 @@ function wwwhisper_log() {
   echo "-----> wwwhisper-buildpack: $*"
 }
 
-if [[ ! -f "${ENV_DIR}/WWWHISPER_URL" ]]; then
-  wwwhisper_log 'wwwhisper add-on must be enabled to use this buildpack.'
-  exit 1
-fi
-
-WWWHISPER_URL=`cat ${ENV_DIR}/WWWHISPER_URL`
-
-function wwwhisper_host() {
-  echo https://`echo ${WWWHISPER_URL}|tr @ '\n'| tail -n1`
-}
-
-function wwwhisper_basic_auth() {
-  local proto_credentials=`echo ${WWWHISPER_URL} |tr @ '\n'|head -n1`
-  # strip protocol prefix
-  local credentials=${proto_credentials#"https://"}
-  echo -n "${credentials}" | base64
-}
-
 mkdir -p "${DST_DIR}/nginx" "${DST_DIR}/bin" "${DST_DIR}/config" \
       "${DST_DIR}/logs" "${BUILD_DIR}/.profile.d"
 
@@ -50,17 +32,5 @@ popd > /dev/null
 cp .profile.d/start-wwwhisper.sh "${BUILD_DIR}/.profile.d/"
 wwwhisper_log "Added start-wwwhisper.sh to .profile.d/"
 
-cp config/nginx.template.conf config/proxy_common.conf "${DST_DIR}/config/"
-
-if [[ -f "${ENV_DIR}/WWWHISPER_NO_OVERLAY" ]]; then
-  # Use an empty file instead of overlay enabling directives.
-  echo "" > "${DST_DIR}/config/wwwhisper_overlay.conf";
-else
-  cp config/wwwhisper_overlay.conf "${DST_DIR}/config/"
-fi;
-
-WWWHISPER_HOST=$(wwwhisper_host) \
-WWWHISPER_BASIC_AUTH=$(wwwhisper_basic_auth) \
-envsubst '$WWWHISPER_HOST $WWWHISPER_BASIC_AUTH' <  config/wwwhisper_proxy.template.conf > ${DST_DIR}/config/wwwhisper_proxy.conf
-
-wwwhisper_log 'Prepared configs.'
+cp config/*.conf "${DST_DIR}/config/"
+wwwhisper_log 'Copied nginx configs.'

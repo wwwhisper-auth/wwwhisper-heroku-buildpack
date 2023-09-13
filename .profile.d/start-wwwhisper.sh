@@ -38,6 +38,16 @@ function wwwhisper_fatal() {
   exit 1
 }
 
+function wwwhisper_host() {
+  echo https://`echo ${WWWHISPER_URL}|tr @ '\n'| tail -n1`
+}
+
+function wwwhisper_basic_auth() {
+  local proto_credentials=`echo ${WWWHISPER_URL} |tr @ '\n'|head -n1`
+  # strip protocol prefix
+  local credentials=${proto_credentials#"https://"}
+  echo -n "${credentials}" | base64
+}
 
 # When SIGTERM is delivered, wait until nginx terminates and then
 # re-raise the SIGTERM to terminate the web application.
@@ -45,7 +55,7 @@ function wwwhisper_sigterm_handler() {
   wwwhisper_log "SIGTERM received, waiting for nginx to terminate."
   # nginx removes the pid file when it exits.
   while [[ -f ${WWWHISPER_NGINX_PID_FILE} ]] ; do
-    sleep 0.2;
+    sleep 0.2
   done
   wwwhisper_log "nginx terminated."
   # Remove the trap and re-raise the signal
@@ -53,19 +63,18 @@ function wwwhisper_sigterm_handler() {
   kill -SIGTERM $$
 }
 
-function wwwhisper_main() {
-  local public_port=${PORT}
-  # Web app should use a private port, not accessible externally.
-  # Reasign the PORT.
-  if [[ "${public_port}" != "10080" ]];
-  then
-    export PORT=10080
-  else
-    export PORT=10081
-  fi
-  wwwhisper_log "Remapped web app external port to private port ${PORT}."
+function wwwhisper_create_nginx_configs() {
+  local public_port=$1
 
-  local web_app_pid=$$;
+  # Set basic auth credentials to access the wwwhisper service.
+  WWWHISPER_HOST=$(wwwhisper_host) \
+  WWWHISPER_BASIC_AUTH=$(wwwhisper_basic_auth) \
+  envsubst '$WWWHISPER_HOST $WWWHISPER_BASIC_AUTH' \
+    < wwwhisper/config/wwwhisper_proxy.template.conf \
+    > wwwhisper/config/wwwhisper_proxy.conf
+  if (( $? != 0 )); then
+    wwwhisper_fatal "Failed to create configuration files."
+  fi
 
   # Set port to listen to in the config.
   PRIVATE_PORT=${PORT} \
@@ -74,10 +83,42 @@ function wwwhisper_main() {
     < wwwhisper/config/nginx.template.conf \
     > wwwhisper/config/nginx.conf
   if (( $? != 0 )); then
-    wwwhisper_fatal "Failed to create configuration files."
+    wwwhisper_fatal "Failed to create configuration files(2)."
+  fi
+
+  if [[ -z "${WWWHISPER_NO_OVERLAY}" ]]; then
+    cp wwwhisper/config/wwwhisper_overlay.template.conf \
+       wwwhisper/config/wwwhisper_overlay.conf
+  else
+    # Use an empty file instead of overlay enabling directives.
+    echo "" > wwwhisper/config/wwwhisper_overlay.conf
+  fi
+
+  if (( $? != 0 )); then
+    wwwhisper_fatal "Failed to create configuration files(3)."
   fi
 
   wwwhisper_log "Created configuration files for nginx authorization."
+}
+
+function wwwhisper_main() {
+  local public_port=${PORT}
+  # Web app should use a private port, not accessible externally.
+  # Reasign the PORT.
+  if [[ "${public_port}" != "10080" ]]; then
+    export PORT=10080
+  else
+    export PORT=10081
+  fi
+  wwwhisper_log "Remapped web app external port to private port ${PORT}."
+
+  local web_app_pid=$$
+
+  if [[ -z "${WWWHISPER_URL}" ]]; then
+    wwwhisper_fatal 'wwwhisper add-on must be enabled to use this buildpack.'
+  fi
+
+  wwwhisper_create_nginx_configs $public_port
 
   function wwwhisper_run_nginx() {
     wwwhisper_log "Waiting for the app to start listening on port ${PORT}."
@@ -88,9 +129,8 @@ function wwwhisper_main() {
       sleep 0.2
     done
 
-    local bin_to_run;
-    if [[ -z "${WWWHISPER_DEBUG}" ]]
-    then
+    local bin_to_run
+    if [[ -z "${WWWHISPER_DEBUG}" ]]; then
       bin_to_run="nginx"
     else
       bin_to_run="nginx-debug"
@@ -122,7 +162,7 @@ function wwwhisper_main() {
       wwwhisper_log "nginx failed with code ${exit_code}," \
                     "killing web app with SIGTERM."
       # In case nginx crashed without removing the pid file.
-      rm ${WWWHISPER_NGINX_PID_FILE}
+      rm -f ${WWWHISPER_NGINX_PID_FILE}
       kill -SIGTERM ${web_app_pid} >/dev/null
       if (( $? == 0 )); then
         # SIGTERM was delivered successfully, deliver SIGKILL after some time.
@@ -130,10 +170,10 @@ function wwwhisper_main() {
         wwwhisper_log "Killing web app with SIGKILL."
         kill -SIGKILL ${web_app_pid} >/dev/null
       fi
-    fi;
+    fi
 
     wwwhisper_log "exiting"
-    exit 1;
+    exit 1
   }
 
   trap wwwhisper_sigterm_handler SIGTERM
@@ -148,3 +188,7 @@ wwwhisper_main
 # middleware to show an error (such setup doesn't make sense, as it
 # would make two auth requests per each incomming request).
 unset WWWHISPER_URL
+unset -f wwwhisper_host
+unset -f wwwhisper_basic_auth
+unset -f wwwhisper_create_nginx_configs
+
