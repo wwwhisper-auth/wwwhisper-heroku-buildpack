@@ -141,7 +141,7 @@ function wwwhisper_main() {
     # subshell.
     trap "" SIGTERM
 
-    wwwhisper_log "Staring nginx process to authorize requests..."
+    wwwhisper_log "Staring nginx process to authorize requests."
     ./wwwhisper/bin/${bin_to_run} -p wwwhisper -c config/nginx.conf &
     local nginx_pid="$!"
 
