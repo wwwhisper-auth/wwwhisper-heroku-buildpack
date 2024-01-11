@@ -42,6 +42,6 @@ cd ${build_dir}
 source .profile.d/start-wwwhisper.sh
 
 # Buildpack started. In a separate terminal start a web application to
-# listen on port 10080.
+# listen on port 17080.
 
 wait -f

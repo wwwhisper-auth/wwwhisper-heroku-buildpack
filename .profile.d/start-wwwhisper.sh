@@ -105,10 +105,10 @@ function wwwhisper_main() {
   local public_port=${PORT}
   # Web app should use a private port, not accessible externally.
   # Reasign the PORT.
-  if [[ "${public_port}" != "10080" ]]; then
-    export PORT=10080
+  if [[ "${public_port}" != "17080" ]]; then
+    export PORT=17080
   else
-    export PORT=10081
+    export PORT=17081
   fi
   wwwhisper_log "Remapped web app external port to private port ${PORT}."
 
