@@ -39,13 +39,15 @@ function wwwhisper_fatal() {
 }
 
 function wwwhisper_host() {
-  echo https://`echo ${WWWHISPER_URL}|tr @ '\n'| tail -n1`
+  local proto=`echo ${WWWHISPER_URL}|cut -d: -f1`
+  local host_port=`echo ${WWWHISPER_URL}|cut -d@ -f2`
+  echo "${proto}://${host_port}"
 }
 
 function wwwhisper_basic_auth() {
-  local proto_credentials=`echo ${WWWHISPER_URL} |tr @ '\n'|head -n1`
-  # strip protocol prefix
-  local credentials=${proto_credentials#"https://"}
+  local proto_credentials=`echo ${WWWHISPER_URL}|cut -d@ -f1`
+  # remove protocol prefix
+  local credentials=`echo ${proto_credentials}|cut -d/ -f3`
   echo -n "${credentials}" | base64
 }
 
