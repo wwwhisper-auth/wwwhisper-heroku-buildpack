@@ -12,7 +12,15 @@ build-heroku-22:
 	@echo "Building nginx in Docker for heroku-22..."
 	@docker run -v $(shell pwd):/buildpack --rm -it -e "STACK=heroku-22" -w /buildpack heroku/heroku:22-build scripts/build_nginx /buildpack/nginx-heroku-22.tgz
 
+build-heroku-24:
+	@echo "Building nginx in Docker for heroku-24..."
+	@docker run -v $(shell pwd):/buildpack --rm -it -e "STACK=heroku-24" -w /buildpack heroku/heroku:24-build scripts/build_nginx /buildpack/nginx-heroku-24.tgz
+
 shell:
+shell-24:
+	@echo "Opening heroku-24 shell..."
+	@docker run -v $(shell pwd):/buildpack --rm -it -e "STACK=heroku-24" -e "PORT=5000" -w /buildpack heroku/heroku:24-build bash
+
 shell-22:
 	@echo "Opening heroku-22 shell..."
 	@docker run -v $(shell pwd):/buildpack --rm -it -e "STACK=heroku-22" -e "PORT=5000" -w /buildpack heroku/heroku:22-build bash

@@ -10,7 +10,7 @@ out_dir=$1
 download_dir=/tmp/nginx-download
 release_dir=/tmp/nginx-release
 
-NGINX_VERSION=${NGINX_VERSION-1.26.1}
+NGINX_VERSION=${NGINX_VERSION-1.26.2}
 
 
 nginx_tarball_url=https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
