@@ -1,4 +1,4 @@
-build: build-heroku-18 build-heroku-20 build-heroku-22
+build: build-heroku-18 build-heroku-20 build-heroku-22 build-heroku-24
 
 build-heroku-18:
 	@echo "Building nginx in Docker for heroku-18..."
