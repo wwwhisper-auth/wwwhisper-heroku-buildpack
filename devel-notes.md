@@ -56,3 +56,12 @@ the wwwhisper add-on enabled.
 ```
 WWWHISPER_URL="PUT_YOUR_WWWHISPER_URL_HERE" ./scripts/devel_start
 ```
+
+## ARM architecture
+
+While Heroku stack 24 images started to support ARM, Heroku Dynos do
+not offer ARM machines. It looks like ARM images are currently used
+only for running the Heroku stack locally. For this reason the
+buildpack doesn't have ARM version for the stack 24 (see this commit
+for changes needed to add ARM support in case the need for it arises
+https://github.com/heroku/heroku-buildpack-nginx/commit/277ccf20bde7fb69145408ee6dd0bc349a497c6b#diff-76ed074a9305c04054cdebb9e9aad2d818052b07091de1f20cad0bbac34ffb52R13)
