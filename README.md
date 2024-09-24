@@ -12,7 +12,7 @@ add-on](https://elements.heroku.com/addons/wwwhisper).
 To enable the buildpack, in your application folder run:
 
 ```
-heroku addons:create wwwhisper:team3[or team10 team20 plus50 plus100 ...] [--admin=your_email]
+heroku addons:create wwwhisper:team-3[or team-10 team-20 plus-50 plus-100 ...] [--admin=your_email]
 heroku buildpacks:add auth/wwwhisper
 ```
 
