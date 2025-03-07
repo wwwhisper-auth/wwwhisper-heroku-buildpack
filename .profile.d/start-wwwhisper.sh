@@ -27,7 +27,7 @@ then
   return 0
 fi
 
-WWWHISPER_NGINX_PID_FILE=`pwd`/wwwhisper/logs/nginx.pid
+WWWHISPER_PID_FILE=`pwd`/wwwhisper/logs/wwwhisper.pid
 
 function wwwhisper_log() {
   echo "buildpack=wwwhisper $*"
@@ -56,7 +56,7 @@ function wwwhisper_basic_auth() {
 function wwwhisper_sigterm_handler() {
   wwwhisper_log "SIGTERM received, waiting for nginx to terminate."
   # nginx removes the pid file when it exits.
-  while [[ -f ${WWWHISPER_NGINX_PID_FILE} ]] ; do
+  while [[ -f ${WWWHISPER_PID_FILE} ]] ; do
     sleep 0.2
   done
   wwwhisper_log "nginx terminated."
@@ -164,7 +164,7 @@ function wwwhisper_main() {
       wwwhisper_log "nginx failed with code ${exit_code}," \
                     "killing web app with SIGTERM."
       # In case nginx crashed without removing the pid file.
-      rm -f ${WWWHISPER_NGINX_PID_FILE}
+      rm -f ${WWWHISPER_PID_FILE}
       kill -SIGTERM ${web_app_pid} >/dev/null
       if (( $? == 0 )); then
         # SIGTERM was delivered successfully, deliver SIGKILL after some time.
