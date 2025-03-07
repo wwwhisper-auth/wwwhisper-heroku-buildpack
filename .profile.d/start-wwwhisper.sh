@@ -51,6 +51,14 @@ function wwwhisper_basic_auth() {
   echo -n "${credentials}" | base64
 }
 
+function nginx_bin_to_run() {
+  if [[ -z "${WWWHISPER_DEBUG}" ]]; then
+    echo "nginx"
+  else
+    echo "nginx-debug"
+  fi
+}
+
 # When SIGTERM is delivered, wait until nginx terminates and then
 # re-raise the SIGTERM to terminate the web application.
 function wwwhisper_sigterm_handler() {
@@ -131,20 +139,13 @@ function wwwhisper_main() {
       sleep 0.2
     done
 
-    local bin_to_run
-    if [[ -z "${WWWHISPER_DEBUG}" ]]; then
-      bin_to_run="nginx"
-    else
-      bin_to_run="nginx-debug"
-    fi
-
     # Do not terminate the subshell with SIGTERM, let nginx handle
     # this signal and terminate gracefully which then terminates the
     # subshell.
     trap "" SIGTERM
 
     wwwhisper_log "Staring nginx process to authorize requests."
-    ./wwwhisper/bin/${bin_to_run} -p wwwhisper -c config/nginx.conf &
+    ./wwwhisper/bin/$(nginx_bin_to_run) -p wwwhisper -c config/nginx.conf &
     local nginx_pid="$!"
 
     wait -f ${nginx_pid}
