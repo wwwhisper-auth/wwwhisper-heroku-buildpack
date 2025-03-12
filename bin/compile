@@ -16,6 +16,7 @@ mkdir -p "${DST_DIR}/nginx" "${DST_DIR}/bin" "${DST_DIR}/config" \
       "${DST_DIR}/logs" "${BUILD_DIR}/.profile.d"
 
 tar -zxf "nginx-${STACK}.tgz" -C "${DST_DIR}/nginx/"
+tar -zxf "wwwhisper.tgz" -C "${DST_DIR}/bin/"
 
 pushd "${DST_DIR}" > /dev/null
 
@@ -24,6 +25,9 @@ mv nginx/mime.types ./config/
 
 nginx_version=$(./bin/nginx -V 2>&1 | head -1 | awk '{ print $NF }')
 wwwhisper_log "Installed ${nginx_version} to ${DST_DIR}"
+
+wwwhisper_version=$(./bin/wwwhisper -version)
+wwwhisper_log "Installed wwwhisper auth proxy ${wwwhisper_version} to ${DST_DIR}"
 
 rmdir nginx;
 

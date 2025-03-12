@@ -52,15 +52,18 @@ function wwwhisper_basic_auth() {
 }
 
 function nginx_bin_to_run() {
-  if [[ -z "${WWWHISPER_DEBUG}" ]]; then
-    echo "nginx"
-  else
+  if [[ -n "${WWWHISPER_DEBUG}" ]]; then
     echo "nginx-debug"
+  else
+    echo "nginx"
   fi
 }
 
-# When SIGTERM is delivered, wait until nginx terminates and then
-# re-raise the SIGTERM to terminate the web application.
+# When the dyno manager restarts a dyno, it sends SIGTERM to all
+# processes in the dyno
+# (https://devcenter.heroku.com/articles/dyno-shutdown-behavior)
+# When the SIGTERM is delivered, wait until nginx terminates and then
+# re-raise the SIGTERM to terminate the current process.
 function wwwhisper_sigterm_handler() {
   wwwhisper_log "SIGTERM received, waiting for nginx to terminate."
   # nginx removes the pid file when it exits.
@@ -144,20 +147,31 @@ function wwwhisper_main() {
     # subshell.
     trap "" SIGTERM
 
-    wwwhisper_log "Staring nginx process to authorize requests."
-    ./wwwhisper/bin/$(nginx_bin_to_run) -p wwwhisper -c config/nginx.conf &
+    if [[ -n "${WWWHISPER_GO}" ]]; then
+      # New auth proxy version based on Go to eventually replace the
+      # nginx based version. Currently a preview hidden behing a flag.
+      wwwhisper_log "Staring wwwhisper auth proxy."
+      WWWHISPER_LOG="info" \
+      PROXY_TO_PORT=${PORT} \
+      PORT=${public_port} \
+      ./wwwhisper/bin/wwwhisper -pidfile ${WWWHISPER_PID_FILE} &
+    else
+      wwwhisper_log "Staring nginx process to authorize requests."
+      ./wwwhisper/bin/$(nginx_bin_to_run) -p wwwhisper -c config/nginx.conf &
+    fi
+
     local nginx_pid="$!"
 
     wait -f ${nginx_pid}
     local exit_code=$?
 
-    # Dyno manager monitors web app process, not nginx process, so
-    # when nginx fails, we terminate web app process. This way dyno
-    # manager notices dyno failure and restarts the dyno (it would
-    # eventually do it anyway, because $PORT stops accepting requests,
-    # but terminating web app process makes it quicker).
+    # Dyno manager monitors web app process, not the auth proxy
+    # process, so when proxy fails, we terminate web app process. This
+    # way dyno manager notices dyno failure and restarts the dyno (it
+    # would eventually do it anyway, because $PORT stops accepting
+    # requests, but terminating web app process makes it quicker).
     #
-    # If nginx is terminated by Heroku dyno manager (SIGTERM or
+    # If auth proxy is terminated by Heroku dyno manager (SIGTERM or
     # SIGQUIT), exit code is 0 and we don't resend this signal,
     # because the dyno manager already delivers it to all the
     # processes.
