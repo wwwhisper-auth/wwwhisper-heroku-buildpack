@@ -65,12 +65,12 @@ function nginx_bin_to_run() {
 # When the SIGTERM is delivered, wait until nginx terminates and then
 # re-raise the SIGTERM to terminate the current process.
 function wwwhisper_sigterm_handler() {
-  wwwhisper_log "SIGTERM received, waiting for nginx to terminate."
-  # nginx removes the pid file when it exits.
+  wwwhisper_log "SIGTERM received, waiting for auth proxy to terminate."
+  # auth proxy removes the pid file when it exits.
   while [[ -f ${WWWHISPER_PID_FILE} ]] ; do
     sleep 0.2
   done
-  wwwhisper_log "nginx terminated."
+  wwwhisper_log "auth proxy terminated."
   # Remove the trap and re-raise the signal
   trap - SIGTERM
   kill -SIGTERM $$
@@ -133,7 +133,7 @@ function wwwhisper_main() {
 
   wwwhisper_create_nginx_configs $public_port
 
-  function wwwhisper_run_nginx() {
+  function wwwhisper_run_auth_proxy() {
     wwwhisper_log "Waiting for the app to start listening on port ${PORT}."
 
     # Loop without any time limit, but Heroku will kill the dyno if
@@ -176,9 +176,9 @@ function wwwhisper_main() {
     # because the dyno manager already delivers it to all the
     # processes.
     if (( ${exit_code} != 0 )); then
-      wwwhisper_log "nginx failed with code ${exit_code}," \
+      wwwhisper_log "auth proxy failed with code ${exit_code}," \
                     "killing web app with SIGTERM."
-      # In case nginx crashed without removing the pid file.
+      # In case proxy crashed without removing the pid file.
       rm -f ${WWWHISPER_PID_FILE}
       kill -SIGTERM ${web_app_pid} >/dev/null
       if (( $? == 0 )); then
@@ -194,7 +194,7 @@ function wwwhisper_main() {
   }
 
   trap wwwhisper_sigterm_handler SIGTERM
-  wwwhisper_run_nginx &
+  wwwhisper_run_auth_proxy &
 }
 
 wwwhisper_main
