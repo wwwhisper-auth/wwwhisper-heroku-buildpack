@@ -52,7 +52,7 @@ function wwwhisper_basic_auth() {
 }
 
 function nginx_bin_to_run() {
-  if [[ -n "${WWWHISPER_DEBUG}" ]]; then
+  if [[ "${WWWHISPER_DEBUG}" == 1 ]]; then
     echo "nginx-debug"
   else
     echo "nginx"
@@ -99,12 +99,12 @@ function wwwhisper_create_nginx_configs() {
     wwwhisper_fatal "Failed to create configuration files(2)."
   fi
 
-  if [[ -z "${WWWHISPER_NO_OVERLAY}" ]]; then
-    cp wwwhisper/config/wwwhisper_overlay.template.conf \
-       wwwhisper/config/wwwhisper_overlay.conf
-  else
+  if [[ "${WWWHISPER_NO_OVERLAY}" == "1" ]]; then
     # Use an empty file instead of overlay enabling directives.
     echo "" > wwwhisper/config/wwwhisper_overlay.conf
+  else
+    cp wwwhisper/config/wwwhisper_overlay.template.conf \
+       wwwhisper/config/wwwhisper_overlay.conf
   fi
 
   if (( $? != 0 )); then
@@ -147,16 +147,15 @@ function wwwhisper_main() {
     # subshell.
     trap "" SIGTERM
 
-    if [[ -n "${WWWHISPER_GO}" ]]; then
-      # New auth proxy version based on Go to eventually replace the
-      # nginx based version. Currently a preview hidden behing a flag.
+    if [[ "${WWWHISPER_NGINX}" != 1 ]]; then
       wwwhisper_log "Staring wwwhisper auth proxy."
-      WWWHISPER_LOG="info" \
-      PROXY_TO_PORT=${PORT} \
-      PORT=${public_port} \
-      ./wwwhisper/bin/wwwhisper -pidfile ${WWWHISPER_PID_FILE} &
+      ./wwwhisper/bin/wwwhisper -listen ${public_port} -proxyto ${PORT} -pidfile ${WWWHISPER_PID_FILE} &
     else
-      wwwhisper_log "Staring nginx process to authorize requests."
+      # Well tested and used extensively in production auth proxy
+      # version based on nginx with the auth-request module. Replaced
+      # by more extensible Go based version, but still retained as
+      # fallback.
+      wwwhisper_log "Staring wwwhisper auth proxy (nginx)."
       ./wwwhisper/bin/$(nginx_bin_to_run) -p wwwhisper -c config/nginx.conf &
     fi
 
