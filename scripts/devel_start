@@ -14,6 +14,8 @@ if [[ -z "${WWWHISPER_URL}" ]]; then
   exit 1
 fi
 
+export WWWHISPER_LOG="debug"
+export WWWHISPER_ALLOW_HTTP="1"
 export STACK="heroku-22";
 export PORT=8080
 
