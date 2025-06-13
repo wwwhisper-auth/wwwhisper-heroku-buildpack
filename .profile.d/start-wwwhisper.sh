@@ -9,9 +9,9 @@
 # number specified in the $PORT environment variable.'
 # https://devcenter.heroku.com/articles/dynos#common-runtime-networking
 #
-# 2) Starts nginx in background to listen on the original $PORT and to
-# authenticate and authorize requests. Authorized requests are proxied
-# to the web application.
+# 2) Starts auth proxy in background to listen on the original $PORT
+# and to authenticate and authorize requests. Authorized requests are
+# proxied to the web application.
 #
 #
 # If this startup script fails, the whole app startup process
@@ -62,7 +62,7 @@ function nginx_bin_to_run() {
 # When the dyno manager restarts a dyno, it sends SIGTERM to all
 # processes in the dyno
 # (https://devcenter.heroku.com/articles/dyno-shutdown-behavior)
-# When the SIGTERM is delivered, wait until nginx terminates and then
+# When the SIGTERM is delivered, wait until proxy terminates and then
 # re-raise the SIGTERM to terminate the current process.
 function wwwhisper_sigterm_handler() {
   wwwhisper_log "SIGTERM received, waiting for auth proxy to terminate."
@@ -142,7 +142,7 @@ function wwwhisper_main() {
       sleep 0.2
     done
 
-    # Do not terminate the subshell with SIGTERM, let nginx handle
+    # Do not terminate the subshell with SIGTERM, let the proxy handle
     # this signal and terminate gracefully which then terminates the
     # subshell.
     trap "" SIGTERM
@@ -159,9 +159,9 @@ function wwwhisper_main() {
       ./wwwhisper/bin/$(nginx_bin_to_run) -p wwwhisper -c config/nginx.conf &
     fi
 
-    local nginx_pid="$!"
+    local proxy_pid="$!"
 
-    wait -f ${nginx_pid}
+    wait -f ${proxy_pid}
     local exit_code=$?
 
     # Dyno manager monitors web app process, not the auth proxy
