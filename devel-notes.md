@@ -1,5 +1,11 @@
 # Buildpack Development
 
+NOTE: The notes below are relevant only for the original, nginx based
+version of the authorization reverse proxy. This version is now
+replaced by a custom Go-based authorization reverse proxy. All new
+applications use this new Go version. nginx version is still kept, but
+will soon be removed.
+
 The buildpack is based on
 [heroku-buildpack-nginx](https://github.com/heroku/heroku-buildpack-nginx),
 but with substantial modifications:
