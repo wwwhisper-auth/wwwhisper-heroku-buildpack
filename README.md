@@ -16,9 +16,12 @@ add-on](https://elements.heroku.com/addons/wwwhisper).
 To enable the buildpack, in your application folder run:
 
 ```
-heroku addons:create wwwhisper:team-3[or team-10 team-20 plus-50 plus-100 ...] [--admin=your_email]
+heroku addons:create wwwhisper:team-3 [--admin=your_email]
 heroku buildpacks:add auth/wwwhisper
 ```
+
+`team-3` is the name of the plan to enable. Run `heroku addons:plans
+wwwhisper` to see all available plans and prices.
 
 There is no need to modify your application code, but you need to push
 the new version of your application for the buildpack to be compiled:
